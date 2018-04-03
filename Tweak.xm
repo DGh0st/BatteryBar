@@ -1,7 +1,9 @@
 #import "BatteryColorPrefs.h"
 #import <libcolorpicker.h>
 
-@interface UIStatusBarNewUIStyleAttributes : NSObject
+@interface UIStatusBarNewUIStyleAttributes : NSObject {
+	UIColor* _foregroundColor; // iOS 7 - 11
+}
 @property (nonatomic, assign) BOOL doesRequireStatusBarBackground;
 @end
 
@@ -116,6 +118,9 @@ static ChargingAnimationStyle chargingAnimationStyle = kNoChargingAnimation;
 
 static CGFloat kAnimationSpeed = 0.5;
 static CGFloat kNormalBarHeight = 3.0;
+static BOOL kUseBlur = NO;
+static CGFloat kWhiteBackgroundGrayness = 0.7;
+static CGFloat kBlackBackgroundGrayness = 0.3;
 
 %group AlwaysWhiteOrBlack
 %hook UIStatusBarNewUIStyleAttributes
@@ -148,7 +153,8 @@ static CGFloat kNormalBarHeight = 3.0;
 %hook UIStatusBar
 -(void)layoutSubviews {
 	// fix status bar not displaying in fullscreen videos when foreground color is always white (for some reason the status bar height is set to 0 internally)
-	if (self.superview != nil && ![self.superview isKindOfClass:%c(UIStatusBarWindow)] && statusBarForegroundColor == kAlwaysWhite) {
+	NSString *appIdentifier = [NSBundle mainBundle].bundleIdentifier;
+	if (appIdentifier != nil && ![appIdentifier isEqualToString:@"com.apple.springboard"] && self.superview != nil && ![self.superview isKindOfClass:%c(UIStatusBarWindow)] && statusBarForegroundColor == kAlwaysWhite) {
 		CGRect frame = self.frame;
 		UIInterfaceOrientation _orientation = MSHookIvar<UIInterfaceOrientation>(self, "_orientation");
 		frame.size.height = [self heightForOrientation:_orientation];
@@ -232,7 +238,7 @@ static CGFloat kNormalBarHeight = 3.0;
 -(void)layoutSubviews {
 	%orig();
 	// fix issues in safari where background of the status bar would disappear
-	if (statusBarForegroundColor != kDefaultStatusColor)
+	if (statusBarForegroundColor != kDefaultStatusColor || batteryBarType == kBackground)
 		[self updateStatusBarBackgroundViewBarHiddenAnimated:YES];
 }
 
@@ -313,8 +319,8 @@ static CGFloat kNormalBarHeight = 3.0;
 		}
 
 		// create a status bar background view if needed
-		if (self.statusBarBackgroundView == nil && statusBarForegroundColor != kDefaultStatusColor) {
-			if (%c(UIVisualEffectView)) // iOS 8 - 11
+		if (self.statusBarBackgroundView == nil && (statusBarForegroundColor != kDefaultStatusColor || batteryBarType == kBackground)) {
+			if (kUseBlur && %c(UIVisualEffectView)) // iOS 8 - 11
 				self.statusBarBackgroundView = [[UIVisualEffectView alloc] initWithFrame:backgroundViewFrame];
 			else
 				self.statusBarBackgroundView = [[UIView alloc] initWithFrame:backgroundViewFrame];
@@ -334,12 +340,43 @@ static CGFloat kNormalBarHeight = 3.0;
 		// set the blur effect or color of status bar background
 		if (batteryBarType == kBackground) {
 			if (%c(UIVisualEffectView) && [self.statusBarBackgroundView isKindOfClass:%c(UIVisualEffectView)]) {
-				if (statusBarForegroundColor == kAlwaysWhite)
+				if (statusBarForegroundColor == kAlwaysWhite) {
 					((UIVisualEffectView *)self.statusBarBackgroundView).effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
-				else if (statusBarForegroundColor == kAlwaysBlack)
+				} else if (statusBarForegroundColor == kAlwaysBlack) {
 					((UIVisualEffectView *)self.statusBarBackgroundView).effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
+				} else {
+					UIStatusBarNewUIStyleAttributes *_currentStyleAttributes = [_statusBar _currentStyleAttributes];
+					if (_currentStyleAttributes != nil) {
+						UIColor *_foregroundColor = MSHookIvar<UIColor *>(_currentStyleAttributes, "_foregroundColor");
+						if (_foregroundColor != nil && [_foregroundColor isEqual:[UIColor whiteColor]])
+							((UIVisualEffectView *)self.statusBarBackgroundView).effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
+						else if (_foregroundColor != nil && [_foregroundColor isEqual:[UIColor blackColor]])
+							((UIVisualEffectView *)self.statusBarBackgroundView).effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleLight];
+						else
+							((UIVisualEffectView *)self.statusBarBackgroundView).effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
+					} else {
+						((UIVisualEffectView *)self.statusBarBackgroundView).effect = [UIBlurEffect effectWithStyle:UIBlurEffectStyleDark];
+					}
+				}
 			} else {
-				self.statusBarBackgroundView.backgroundColor = [UIColor grayColor];
+				if (statusBarForegroundColor == kAlwaysWhite) {
+					self.statusBarBackgroundView.backgroundColor = [UIColor colorWithRed:kBlackBackgroundGrayness green:kBlackBackgroundGrayness blue:kBlackBackgroundGrayness alpha:1.0]; // dark gray
+				} else if (statusBarForegroundColor == kAlwaysBlack) {
+					self.statusBarBackgroundView.backgroundColor = [UIColor colorWithRed:kWhiteBackgroundGrayness green:kWhiteBackgroundGrayness blue:kWhiteBackgroundGrayness alpha:1.0]; // light gray
+				} else {
+					UIStatusBarNewUIStyleAttributes *_currentStyleAttributes = [_statusBar _currentStyleAttributes];
+					if (_currentStyleAttributes != nil) {
+						UIColor *_foregroundColor = MSHookIvar<UIColor *>(_currentStyleAttributes, "_foregroundColor");
+						if (_foregroundColor != nil && [_foregroundColor isEqual:[UIColor whiteColor]])
+							self.statusBarBackgroundView.backgroundColor = [UIColor colorWithRed:kBlackBackgroundGrayness green:kBlackBackgroundGrayness blue:kBlackBackgroundGrayness alpha:1.0]; // dark gray
+						else if (_foregroundColor != nil && [_foregroundColor isEqual:[UIColor blackColor]])
+							self.statusBarBackgroundView.backgroundColor = [UIColor colorWithRed:kWhiteBackgroundGrayness green:kWhiteBackgroundGrayness blue:kWhiteBackgroundGrayness alpha:1.0]; // light gray
+						else
+							self.statusBarBackgroundView.backgroundColor = [UIColor colorWithRed:kBlackBackgroundGrayness green:kBlackBackgroundGrayness blue:kBlackBackgroundGrayness alpha:1.0]; // dark gray
+					} else {
+						self.statusBarBackgroundView.backgroundColor = [UIColor colorWithRed:kBlackBackgroundGrayness green:kBlackBackgroundGrayness blue:kBlackBackgroundGrayness alpha:1.0]; // dark gray
+					}
+				}
 			}
 
 			// fix bar color since it is in the background
@@ -360,7 +397,7 @@ static CGFloat kNormalBarHeight = 3.0;
 			else
 				self.statusBarBackgroundView.backgroundColor = [UIColor whiteColor];
 		}
-		if (statusBarForegroundColor != kDefaultStatusColor) {
+		if (statusBarForegroundColor != kDefaultStatusColor || batteryBarType == kBackground) {
 			[self updateStatusBarBackgroundViewBarHiddenAnimated:YES];
 			self.statusBarBackgroundView.frame = backgroundViewFrame;
 		}
@@ -428,6 +465,8 @@ static CGFloat kNormalBarHeight = 3.0;
 	BOOL shouldHideBackground = NO;
 	if (_currentStyleAttributes != nil && [_currentStyleAttributes respondsToSelector:@selector(doesRequireStatusBarBackground)])
 		shouldHideBackground = ![_currentStyleAttributes doesRequireStatusBarBackground];
+	if (batteryBarType == kBackground)
+		shouldHideBackground = NO;
 
 	if (animated)
 		[UIView animateWithDuration:kAnimationSpeed animations:^{
@@ -550,6 +589,9 @@ static void reloadPrefs() {
 
 	kAnimationSpeed = [prefs objectForKey:@"animationSpeed"] ? (CGFloat)[[prefs objectForKey:@"animationSpeed"] floatValue] : 0.5;
 	kNormalBarHeight = [prefs objectForKey:@"barHeight"] ? (CGFloat)[[prefs objectForKey:@"barHeight"] floatValue] : 3.0;
+	kUseBlur = [prefs objectForKey:@"isBlurBackgroundEnabled"] ? [[prefs objectForKey:@"isBlurBackgroundEnabled"] boolValue] : NO;
+	kWhiteBackgroundGrayness = [prefs objectForKey:@"WhiteBackgroundGrayness"] ? (CGFloat)[[prefs objectForKey:@"WhiteBackgroundGrayness"] floatValue] : 0.7;
+	kBlackBackgroundGrayness = [prefs objectForKey:@"BlackBackgroundGrayness"] ? (CGFloat)[[prefs objectForKey:@"BlackBackgroundGrayness"] floatValue] : 0.3;
 
 	[[BatteryColorPrefs sharedInstance] updatePreferences]; // update color prefs
 }
