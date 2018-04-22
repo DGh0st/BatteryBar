@@ -2,7 +2,7 @@ Package: com.dgh0st.batterybar
 Name: BatteryBar
 Depends: mobilesubstrate, preferenceloader, org.thebigboss.libcolorpicker
 Conflicts: com.skylerk99.powerbar, org.thebigboss.batterystatusbar
-Version: 0.0.1
+Version: 0.0.3
 Architecture: iphoneos-arm
 Description: Display a bar that represents the battery percentage in the status bar.
 Maintainer: DGh0st <deeppwnage@yahoo.com>

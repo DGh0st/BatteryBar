@@ -99,7 +99,8 @@ typedef enum BatteryColorStyle : NSInteger {
 
 typedef enum ChargingAnimationStyle : NSInteger {
 	kNoChargingAnimation = 0,
-	kPulse
+	kPulse,
+	kSway
 } ChargingAnimationStyle;
 
 static BOOL isEnabled = YES;
@@ -109,6 +110,7 @@ static BOOL isBatteryIconHidden = YES;
 static BOOL isChargingIconHidden = YES;
 static BarType batteryBarType = kSkinny;
 static BOOL isBottomBarEnabled = NO;
+static CGFloat normalBarHeight = 3.0;
 static BarAlignment batteryBarAlignment = kLeft;
 static BatteryColorStyle batteryColorStyle = kDefaultBatteryColor;
 static CGFloat batteryBarOpacity = 1.0;
@@ -117,7 +119,6 @@ static BOOL isGradientChargingEnabled = NO;
 static ChargingAnimationStyle chargingAnimationStyle = kNoChargingAnimation;
 
 static CGFloat kAnimationSpeed = 0.5;
-static CGFloat kNormalBarHeight = 3.0;
 static BOOL kUseBlur = NO;
 static CGFloat kWhiteBackgroundGrayness = 0.7;
 static CGFloat kBlackBackgroundGrayness = 0.3;
@@ -209,7 +210,7 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 	if (self.superview != nil && batteryBarType == kThick && !isBottomBarEnabled) {
 		UIStatusBarForegroundView *_foregroundView = (UIStatusBarForegroundView *)self.superview;
 		CGRect foregroundFrame = _foregroundView.frame;
-		foregroundFrame.origin.y = kNormalBarHeight;
+		foregroundFrame.origin.y = normalBarHeight;
 		_foregroundView.frame = foregroundFrame;
 	}
 
@@ -222,8 +223,11 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 	NSInteger _previousState = MSHookIvar<NSInteger>(self, "_state");
 	BOOL result = %orig(arg1, arg2);
 	NSInteger _newState = MSHookIvar<NSInteger>(self, "_state");
-	if ((_previousState == kChargingBatteryStyle || _previousState == kLowPowerModeAndChargingStyle) && (_newState == kNormalBatteryStyle || _newState == kLowPowerModeBatteryStyle) && self.batteryPercentBarView != nil && chargingAnimationStyle != kNoChargingAnimation) // Charging -> Not Charging
+	if ((_previousState == kChargingBatteryStyle || _previousState == kLowPowerModeAndChargingStyle) && (_newState == kNormalBatteryStyle || _newState == kLowPowerModeBatteryStyle) && self.batteryPercentBarView != nil && chargingAnimationStyle != kNoChargingAnimation) { // Charging -> Not Charging
 		[self.batteryPercentBarView.layer removeAllAnimations];
+		self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
+		self.batteryPercentBarView.alpha = 1.0;
+	}
 	if (result) // only resetup bar when needed
 		[self resetupBatteryPercentBarViewAnimated:YES];
 	return result;
@@ -295,20 +299,20 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 		CGRect backgroundViewFrame;
 		if (batteryBarType == kThick) {
 			if (isBottomBarEnabled) {
-				barFrame = CGRectMake(xPosition, statusBarHeight - kNormalBarHeight, foregroundFrame.size.width * percentage, kNormalBarHeight * 2);
-				backgroundViewFrame = CGRectMake(0, 0, foregroundFrame.size.width, statusBarHeight + kNormalBarHeight);
+				barFrame = CGRectMake(xPosition, statusBarHeight - normalBarHeight, foregroundFrame.size.width * percentage, normalBarHeight * 2);
+				backgroundViewFrame = CGRectMake(0, 0, foregroundFrame.size.width, statusBarHeight + normalBarHeight);
 			} else {
-				barFrame = CGRectMake(xPosition, -kNormalBarHeight, foregroundFrame.size.width * percentage, kNormalBarHeight * 2);
-				backgroundViewFrame = CGRectMake(0, -kNormalBarHeight, foregroundFrame.size.width, statusBarHeight + kNormalBarHeight);
+				barFrame = CGRectMake(xPosition, -normalBarHeight, foregroundFrame.size.width * percentage, normalBarHeight * 2);
+				backgroundViewFrame = CGRectMake(0, -normalBarHeight, foregroundFrame.size.width, statusBarHeight + normalBarHeight);
 			}
 		} else if (batteryBarType == kBackground) {
 			barFrame = CGRectMake(xPosition, 0, foregroundFrame.size.width * percentage, statusBarHeight);
 			backgroundViewFrame = CGRectMake(0, 0, foregroundFrame.size.width, statusBarHeight);
 		} else {
 			if (isBottomBarEnabled) 
-				barFrame = CGRectMake(xPosition, statusBarHeight - kNormalBarHeight, foregroundFrame.size.width * percentage, kNormalBarHeight);
+				barFrame = CGRectMake(xPosition, statusBarHeight - normalBarHeight, foregroundFrame.size.width * percentage, normalBarHeight);
 			else
-				barFrame = CGRectMake(xPosition, 0, foregroundFrame.size.width * percentage, kNormalBarHeight);
+				barFrame = CGRectMake(xPosition, 0, foregroundFrame.size.width * percentage, normalBarHeight);
 			backgroundViewFrame = CGRectMake(0, 0, foregroundFrame.size.width, statusBarHeight);
 		}
 
@@ -424,30 +428,38 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 		if (!self.isAnimatingCharging) {
 			self.isAnimatingCharging = YES;
 			if (chargingAnimationStyle == kPulse) {
-				self.batteryPercentBarView.alpha = 1.0;
-				[UIView animateWithDuration:kAnimationSpeed * 3 animations:^{
-					self.batteryPercentBarView.alpha = 0.0;
-				} completion:^(BOOL zeroFinished) {
-					if (zeroFinished) {
-						if (MSHookIvar<NSInteger>(self, "_state") == kChargingBatteryStyle) {
-							[UIView animateWithDuration:kAnimationSpeed * 3 animations:^{
-								self.batteryPercentBarView.alpha = 1.0;
-							} completion:^(BOOL oneFinished) {
-								if (!oneFinished)
-									self.batteryPercentBarView.alpha = 1.0;
-								self.isAnimatingCharging = NO;
-								[self doChargingAnimation];
-							}];
-						} else {
-							self.isAnimatingCharging = NO;
-							self.batteryPercentBarView.alpha = 1.0;
-						}
-					} else {
-						self.batteryPercentBarView.alpha = 1.0;
-						self.isAnimatingCharging = NO;
-						[self doChargingAnimation];
-					}
+				[CATransaction begin];
+				[CATransaction setCompletionBlock:^{
+					self.isAnimatingCharging = NO;
+					self.batteryPercentBarView.alpha = 1.0;
+					[self doChargingAnimation];
 				}];
+				CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
+				animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+				animation.duration = kAnimationSpeed * 6.0;
+				animation.values = @[ @(1.0), @(0.0), @(1.0) ];
+				[self.batteryPercentBarView.layer addAnimation:animation forKey:@"opacity"];
+				[CATransaction commit];
+			} else if (chargingAnimationStyle == kSway){
+				[CATransaction begin];
+				[CATransaction setCompletionBlock:^{
+					self.isAnimatingCharging = NO;
+					self.batteryPercentBarView.transform = CGAffineTransformIdentity;
+					[self doChargingAnimation];
+				}];
+				CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"transform.translation.x"];
+				animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+				animation.duration = kAnimationSpeed * 6.0;
+				CGFloat rightTranslation = self.superview.frame.size.width - self.batteryPercentBarView.frame.size.width - self.batteryPercentBarView.frame.origin.x;
+				CGFloat leftTranslation = -self.batteryPercentBarView.frame.origin.x;
+				if (batteryBarAlignment == kLeft)
+					animation.values = @[ @(0.0), @(rightTranslation), @(0.0) ];
+				else if (batteryBarAlignment == kRight)
+					animation.values = @[ @(0.0), @(leftTranslation), @(0.0) ];
+				else
+					animation.values = @[ @(0.0), @(leftTranslation), @(0.0), @(rightTranslation), @(0.0) ];
+				[self.batteryPercentBarView.layer addAnimation:animation forKey:@"sway"];
+				[CATransaction commit];
 			}
 		}
 	}
@@ -580,6 +592,7 @@ static void reloadPrefs() {
 	isChargingIconHidden = [prefs objectForKey:@"isChargingIconHidden"] ? [[prefs objectForKey:@"isChargingIconHidden"] boolValue] : YES;
 	batteryBarType = [prefs objectForKey:@"batteryBarType"] ? (BarType)[[prefs objectForKey:@"batteryBarType"] intValue] : kSkinny;
 	isBottomBarEnabled = [prefs objectForKey:@"isBottomBarEnabled"] ? [[prefs objectForKey:@"isBottomBarEnabled"] boolValue] : NO;
+	normalBarHeight = [prefs objectForKey:@"barHeight"] ? (CGFloat)[[prefs objectForKey:@"barHeight"] floatValue] : 3.0;
 	batteryBarAlignment = [prefs objectForKey:@"batteryBarAlignment"] ? (BarAlignment)[[prefs objectForKey:@"batteryBarAlignment"] intValue] : kLeft;
 	batteryColorStyle = [prefs objectForKey:@"batteryColorStyle"] ? (BatteryColorStyle)[[prefs objectForKey:@"batteryColorStyle"] intValue] : kDefaultBatteryColor;
 	batteryBarOpacity = [prefs objectForKey:@"batteryBarOpacity"] ? (CGFloat)[[prefs objectForKey:@"batteryBarOpacity"] floatValue] : 1.0;
@@ -588,7 +601,6 @@ static void reloadPrefs() {
 	chargingAnimationStyle = [prefs objectForKey:@"chargingAnimationStyle"] ? (ChargingAnimationStyle)[[prefs objectForKey:@"chargingAnimationStyle"] intValue] : kNoChargingAnimation;
 
 	kAnimationSpeed = [prefs objectForKey:@"animationSpeed"] ? (CGFloat)[[prefs objectForKey:@"animationSpeed"] floatValue] : 0.5;
-	kNormalBarHeight = [prefs objectForKey:@"barHeight"] ? (CGFloat)[[prefs objectForKey:@"barHeight"] floatValue] : 3.0;
 	kUseBlur = [prefs objectForKey:@"isBlurBackgroundEnabled"] ? [[prefs objectForKey:@"isBlurBackgroundEnabled"] boolValue] : NO;
 	kWhiteBackgroundGrayness = [prefs objectForKey:@"WhiteBackgroundGrayness"] ? (CGFloat)[[prefs objectForKey:@"WhiteBackgroundGrayness"] floatValue] : 0.7;
 	kBlackBackgroundGrayness = [prefs objectForKey:@"BlackBackgroundGrayness"] ? (CGFloat)[[prefs objectForKey:@"BlackBackgroundGrayness"] floatValue] : 0.3;

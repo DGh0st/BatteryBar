@@ -10,6 +10,7 @@
 @interface BBRootListController : PSListController <MFMailComposeViewControllerDelegate> {
 	BOOL _isCurrentlyDisablingSpecifiers;
 	PSSpecifier *_bottomBarSpecifier;
+	PSSpecifier *_barHeightSpecifier;
 	PSSpecifier *_hideChargingIconSpecifier;
 	PSSpecifier *_homescreenBackgroundSpecifier;
 	PSSpecifier *_customSolidBatteryColor;

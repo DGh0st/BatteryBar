@@ -115,10 +115,12 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>id</key>
+			<string>Type</string>
 			<key>label</key>
 			<string>Bar Type</string>
 			<key>footerText</key>
-			<string>Display the battery bar at the bottom of status bar instead of the top</string>
+			<string>Set the height of the bar</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -159,6 +161,28 @@
 			<string>isBottomBarEnabled</string>
 			<key>label</key>
 			<string>Enable Bottom Bar</string>
+			<key>PostNotification</key>
+			<string>com.dgh0st.batterybar/settingschanged</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSliderCell</string>
+			<key>cellClass</key>
+			<string>BBSliderCell</string>
+			<key>id</key>
+			<string>BarHeight</string>
+			<key>min</key>
+			<real>0.1</real>
+			<key>max</key>
+			<real>20.0</real>
+			<key>showValue</key>
+			<true/>
+			<key>default</key>
+			<real>3.0</real>
+			<key>defaults</key>
+			<string>com.dgh0st.batterybar</string>
+			<key>key</key>
+			<string>barHeight</string>
 			<key>PostNotification</key>
 			<string>com.dgh0st.batterybar/settingschanged</string>
 		</dict>
@@ -289,11 +313,13 @@
 			<array>
 				<string>None</string>
 				<string>Pulse</string>
+				<string>Sway</string>
 			</array>
 			<key>validValues</key>
 			<array>
 				<integer>0</integer>
 				<integer>1</integer>
+				<integer>2</integer>
 			</array>
 			<key>default</key>
 			<integer>0</integer>
