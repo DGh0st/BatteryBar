@@ -105,6 +105,7 @@ typedef enum ChargingAnimationStyle : NSInteger {
 } ChargingAnimationStyle;
 
 static BOOL isEnabled = YES;
+static BOOL isUseActualBatteryLevelEnabled = YES;
 static StatusBarColorType statusBarForegroundColor = kDefaultStatusColor;
 static BOOL isHomescreenBackgroundEnabled = NO;
 static BOOL isBatteryIconHidden = YES;
@@ -251,9 +252,9 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 %new
 -(void)resetupBatteryPercentBarViewAnimated:(BOOL)animated {
 	if (self.superview != nil) {
-		BOOL shouldRetrieveBackupInfo = [self respondsToSelector:@selector(cachedImageSet)] && [self cachedImageSet] == nil;
+		BOOL shouldRetrieveBackupInfo = [self respondsToSelector:@selector(cachedImageSet)] && ([self cachedImageSet] == nil || MSHookIvar<id>(self, "_cachedImageSet") == nil);
 		NSInteger _capacity = !shouldRetrieveBackupInfo && [self respondsToSelector:@selector(cachedCapacity)] ? [self cachedCapacity] : MSHookIvar<NSInteger>(self, "_capacity");
-		if (_capacity > 100 || _capacity < 0) { // Getting some error sometime so just get another way of finding battery level (most likely not finding capacity)
+		if (_capacity > 100 || _capacity < 0 || isUseActualBatteryLevelEnabled) { // Getting some error sometime so just get another way of finding battery level (most likely not finding capacity)
 			if (![UIDevice currentDevice].batteryMonitoringEnabled)
 				[UIDevice currentDevice].batteryMonitoringEnabled = YES;
 			_capacity = (NSInteger)([UIDevice currentDevice].batteryLevel * 100); // iOS 5 - 11
@@ -619,6 +620,7 @@ static void reloadPrefs() {
 
 	isEnabled = [prefs objectForKey:@"isEnabled"] ? [[prefs objectForKey:@"isEnabled"] boolValue] : YES;
 
+	isUseActualBatteryLevelEnabled = [prefs objectForKey:@"isUseActualBatteryLevelEnabled"] ? [[prefs objectForKey:@"isUseActualBatteryLevelEnabled"] boolValue] : YES;
 	statusBarForegroundColor = [prefs objectForKey:@"statusBarForegroundColor"] ? (StatusBarColorType)[[prefs objectForKey:@"statusBarForegroundColor"] intValue] : kDefaultStatusColor;
 	isHomescreenBackgroundEnabled = [prefs objectForKey:@"isHomescreenBackgroundEnabled"] ? [[prefs objectForKey:@"isHomescreenBackgroundEnabled"] boolValue] : NO;
 	isBatteryIconHidden = [prefs objectForKey:@"isBatteryIconHidden"] ? [[prefs objectForKey:@"isBatteryIconHidden"] boolValue] : YES;
