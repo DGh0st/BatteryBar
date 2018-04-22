@@ -38,6 +38,7 @@
 -(UIImage *)_accessoryImage; // iOS 7 - 11
 -(NSUInteger)cachedBatteryStyle; // iOS 10 - 11
 -(NSInteger)cachedCapacity; // iOS 10 - 11
+-(id)cachedImageSet; // iOS 10 - 11
 @end
 
 @interface UIStatusBar : UIView {
@@ -224,6 +225,7 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 	BOOL result = %orig(arg1, arg2);
 	NSInteger _newState = MSHookIvar<NSInteger>(self, "_state");
 	if ((_previousState == kChargingBatteryStyle || _previousState == kLowPowerModeAndChargingStyle) && (_newState == kNormalBatteryStyle || _newState == kLowPowerModeBatteryStyle) && self.batteryPercentBarView != nil && chargingAnimationStyle != kNoChargingAnimation) { // Charging -> Not Charging
+		self.isAnimatingCharging = NO;
 		[self.batteryPercentBarView.layer removeAllAnimations];
 		self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
 		self.batteryPercentBarView.alpha = 1.0;
@@ -249,7 +251,8 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 %new
 -(void)resetupBatteryPercentBarViewAnimated:(BOOL)animated {
 	if (self.superview != nil) {
-		NSInteger _capacity = [self respondsToSelector:@selector(cachedCapacity)] ? [self cachedCapacity] : MSHookIvar<NSInteger>(self, "_capacity");
+		BOOL shouldRetrieveBackupInfo = [self respondsToSelector:@selector(cachedImageSet)] && [self cachedImageSet] == nil;
+		NSInteger _capacity = !shouldRetrieveBackupInfo && [self respondsToSelector:@selector(cachedCapacity)] ? [self cachedCapacity] : MSHookIvar<NSInteger>(self, "_capacity");
 		if (_capacity > 100 || _capacity < 0) { // Getting some error sometime so just get another way of finding battery level (most likely not finding capacity)
 			if (![UIDevice currentDevice].batteryMonitoringEnabled)
 				[UIDevice currentDevice].batteryMonitoringEnabled = YES;
@@ -265,7 +268,7 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 				_state = kNormalBatteryStyle;
 		}
 		NSUInteger _cachedBatteryStyle;
-		if ([self respondsToSelector:@selector(cachedBatteryStyle)]) {
+		if (!shouldRetrieveBackupInfo && [self respondsToSelector:@selector(cachedBatteryStyle)]) {
 			_cachedBatteryStyle = [self cachedBatteryStyle];
 		} else {
 			NSProcessInfo *processInfo = [NSProcessInfo processInfo];
@@ -428,38 +431,68 @@ static CGFloat kBlackBackgroundGrayness = 0.3;
 		if (!self.isAnimatingCharging) {
 			self.isAnimatingCharging = YES;
 			if (chargingAnimationStyle == kPulse) {
-				[CATransaction begin];
-				[CATransaction setCompletionBlock:^{
+				self.batteryPercentBarView.alpha = 1.0;
+				[UIView animateKeyframesWithDuration:kAnimationSpeed * 6.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+					[UIView addKeyframeWithRelativeStartTime:0.0 relativeDuration:0.5 animations:^{
+						self.batteryPercentBarView.alpha = 0.0;
+					}];
+					[UIView addKeyframeWithRelativeStartTime:0.5 relativeDuration:0.5 animations:^{
+						self.batteryPercentBarView.alpha = 1.0;
+					}];
+				} completion:^(BOOL finished) {
 					self.isAnimatingCharging = NO;
-					self.batteryPercentBarView.alpha = 1.0;
-					[self doChargingAnimation];
+					if (finished)
+						[self doChargingAnimation];
 				}];
-				CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
-				animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
-				animation.duration = kAnimationSpeed * 6.0;
-				animation.values = @[ @(1.0), @(0.0), @(1.0) ];
-				[self.batteryPercentBarView.layer addAnimation:animation forKey:@"opacity"];
-				[CATransaction commit];
 			} else if (chargingAnimationStyle == kSway){
-				[CATransaction begin];
-				[CATransaction setCompletionBlock:^{
-					self.isAnimatingCharging = NO;
-					self.batteryPercentBarView.transform = CGAffineTransformIdentity;
-					[self doChargingAnimation];
-				}];
-				CAKeyframeAnimation *animation = [CAKeyframeAnimation animationWithKeyPath:@"transform.translation.x"];
-				animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
-				animation.duration = kAnimationSpeed * 6.0;
 				CGFloat rightTranslation = self.superview.frame.size.width - self.batteryPercentBarView.frame.size.width - self.batteryPercentBarView.frame.origin.x;
 				CGFloat leftTranslation = -self.batteryPercentBarView.frame.origin.x;
+				self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
 				if (batteryBarAlignment == kLeft)
-					animation.values = @[ @(0.0), @(rightTranslation), @(0.0) ];
+					[UIView animateKeyframesWithDuration:kAnimationSpeed * 6.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+						[UIView addKeyframeWithRelativeStartTime:0.0 relativeDuration:0.5 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(rightTranslation, 0.0);
+						}];
+						[UIView addKeyframeWithRelativeStartTime:0.5 relativeDuration:0.5 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
+						}];
+					} completion:^(BOOL finished) {
+						self.isAnimatingCharging = NO;
+						if (finished)
+							[self doChargingAnimation];
+					}];
 				else if (batteryBarAlignment == kRight)
-					animation.values = @[ @(0.0), @(leftTranslation), @(0.0) ];
+					[UIView animateKeyframesWithDuration:kAnimationSpeed * 6.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+						[UIView addKeyframeWithRelativeStartTime:0.0 relativeDuration:0.5 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(leftTranslation, 0.0);
+						}];
+						[UIView addKeyframeWithRelativeStartTime:0.5 relativeDuration:0.5 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
+						}];
+					} completion:^(BOOL finished) {
+						self.isAnimatingCharging = NO;
+						if (finished)
+							[self doChargingAnimation];
+					}];
 				else
-					animation.values = @[ @(0.0), @(leftTranslation), @(0.0), @(rightTranslation), @(0.0) ];
-				[self.batteryPercentBarView.layer addAnimation:animation forKey:@"sway"];
-				[CATransaction commit];
+					[UIView animateKeyframesWithDuration:kAnimationSpeed * 6.0 delay:0.0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+						[UIView addKeyframeWithRelativeStartTime:0.0 relativeDuration:0.25 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(leftTranslation, 0.0);
+						}];
+						[UIView addKeyframeWithRelativeStartTime:0.25 relativeDuration:0.25 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
+						}];
+						[UIView addKeyframeWithRelativeStartTime:0.5 relativeDuration:0.25 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(rightTranslation, 0.0);
+						}];
+						[UIView addKeyframeWithRelativeStartTime:0.75 relativeDuration:0.25 animations:^{
+							self.batteryPercentBarView.transform = CGAffineTransformMakeTranslation(0.0, 0.0);
+						}];
+					} completion:^(BOOL finished) {
+						self.isAnimatingCharging = NO;
+						if (finished)
+							[self doChargingAnimation];
+					}];
 			}
 		}
 	}
