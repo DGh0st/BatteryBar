@@ -614,7 +614,10 @@ static void reloadPrefs() {
 				prefs = [NSDictionary dictionary];
 			CFRelease(keyList);
 		}
-	} else {
+	}
+
+	// needed to do this for photos app (it doesn't seem to create a copy of prefs)
+	if (prefs == nil) {
 		prefs = [NSDictionary dictionaryWithContentsOfFile:kSettingsPath];
 	}
 
@@ -654,12 +657,14 @@ static void respringDevice() {
 		[[%c(SpringBoard) sharedApplication] _relaunchSpringBoardNow];
 }
 
-/*%dtor {
-	// causes crashes for some reason when launching some apps (i.e Amazon)
-	CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, kSettingsChangedNotification, NULL);
-	CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, kColorChangedNotification, NULL);
-	CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, kRespringNotification, NULL);
-}*/
+%dtor {
+	// becauses Amazon app generates crashes for some reason when launching
+	if (![[NSBundle mainBundle].bundleIdentifier isEqualToString:@"com.amazon.Amazon"]) {
+		CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, kSettingsChangedNotification, NULL);
+		CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, kColorChangedNotification, NULL);
+		CFNotificationCenterRemoveObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, kRespringNotification, NULL);
+	}
+}
 
 %ctor {
 	reloadPrefs();
