@@ -7,7 +7,7 @@ BatteryBar_FILES = BBRootListController.m BBSolidColorListController.m BBGradien
 BatteryBar_INSTALL_PATH = /Library/PreferenceBundles
 BatteryBar_FRAMEWORKS = UIKit MessageUI
 BatteryBar_PRIVATE_FRAMEWORKS = Preferences
-SwitcherControls_LIBRARIES = colorpicker
+BatteryBar_LIBRARIES = colorpicker
 
 include $(THEOS_MAKE_PATH)/bundle.mk
 
