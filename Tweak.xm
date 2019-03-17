@@ -618,7 +618,7 @@ static void reloadPrefs() {
 
 	// needed to do this for photos app (it doesn't seem to create a copy of prefs)
 	if (prefs == nil) {
-		prefs = [NSDictionary dictionaryWithContentsOfFile:kSettingsPath];
+		prefs = [[NSDictionary alloc] initWithContentsOfFile:kSettingsPath];
 	}
 
 	isEnabled = [prefs objectForKey:@"isEnabled"] ? [[prefs objectForKey:@"isEnabled"] boolValue] : YES;
@@ -644,6 +644,8 @@ static void reloadPrefs() {
 	kBlackBackgroundGrayness = [prefs objectForKey:@"BlackBackgroundGrayness"] ? (CGFloat)[[prefs objectForKey:@"BlackBackgroundGrayness"] floatValue] : 0.3;
 
 	[[BatteryColorPrefs sharedInstance] updatePreferences]; // update color prefs
+
+	[prefs release];
 }
 
 static void reloadColorPrefs() {
